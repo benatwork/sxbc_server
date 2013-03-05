@@ -1,37 +1,26 @@
 var express = require("express"),
   app = express(),
   Twit = require('twit'),
-  mongo = require('mongodb');
-
-var acceptedWords = [
-  "Hot",
-  "Sexy",
-  "Love",
-  "Amazing",
-  "Kiss",
-  "Handsome",
-  "Pretty",
-  "Whoa",
-  "Adorable",
-  "beautiful",
-  "Cute"
-];
+  mongo = require('mongodb'),
+  io = require('socket.io'),
+  _socket;
 
 
-// var allowCrossDomain = function(req, res, next) {
-//     res.header('Access-Control-Allow-Credentials', true);
-//     res.header('Access-Control-Allow-Origin', req.headers.origin);
-//     res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');
-//     //res.header('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
-//     res.header("Access-Control-Allow-Headers", "origin, x-requested-with, content-type");
-//      // intercept OPTIONS method
 
-//     if ('OPTIONS' == req.method) {
-//       res.send(200);
-//     } else{
-//       next();
-//     }
-// };
+var allowCrossDomain = function(req, res, next) {
+    res.header('Access-Control-Allow-Credentials', true);
+    res.header('Access-Control-Allow-Origin', req.headers.origin);
+    res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');
+    //res.header('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
+    res.header("Access-Control-Allow-Headers", "origin, x-requested-with, content-type");
+     // intercept OPTIONS method
+
+    if ('OPTIONS' == req.method) {
+      res.send(200);
+    } else{
+      next();
+    }
+};
 
 //twitter credentials
 //get from https://dev.twitter.com/apps/
@@ -86,18 +75,31 @@ stream.on('tweet', function (tweet) {
 
 //start server
 var port = process.env.PORT || 3001;
-app.listen(port);
+//app.listen(port);
+
+var server = require('http').createServer(app);
+var io = io.listen(server);
+
+server.listen(port);
 console.log('sxbc server started on port '+port);
+
+
+
+//init websockets
+io.sockets.on('connection', function (socket) {
+  _socket = socket;
+});
+
+
 
 
 //post route
 function initRoutes(){
   app.post('*', function(req, res){
-    
+
     var message = req.body.message;
     var ip = req.connection.remoteAddress;
     var wordFound = false;
-
 
     if(message.match('@')){
       res.json(403,{
@@ -136,6 +138,7 @@ function initRoutes(){
       }
 
       var tweetData = reply;
+      _socket.volatile.emit('tweet', tweetData);
       // tweetCollection.insert(tweetData, function(error, result){
       //   if(err) {
       //     console.log(err.statusCode);
@@ -150,7 +153,6 @@ function initRoutes(){
       // });
     });
   });
-
 
 
 
