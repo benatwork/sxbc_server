@@ -62,11 +62,11 @@ mongo.connect(mongo_uri, {}, function(error, db){
       io.sockets.on('connection', function (socket) {
         _socket = socket;
         //websockets ready, init routes
-        
+
       });
       initRoutes();
 
-      
+
     });
   });
 });
@@ -83,6 +83,14 @@ stream.on('tweet', function (tweet) {
 //start server
 var port = process.env.PORT || 3001;
 var server = require('http').createServer(app);
+
+// Workaround for Heroku not supporting true websockets
+// https://devcenter.heroku.com/articles/using-socket-io-with-node-js-on-heroku
+io.configure(function () {
+io.configure(function () {
+  io.set("transports", ["xhr-polling"]);
+  io.set("polling duration", 10);
+});
 var io = io.listen(server);
 server.listen(port);
 console.log('sxbc server started on port '+port);
