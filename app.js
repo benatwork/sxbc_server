@@ -1,7 +1,7 @@
 var express = require("express"),
   app = express(),
   Twit = require('twit'),
-  pg = require('pg');
+  mongo = require('mongodb');
 
 var acceptedWords = [
   "Hot",
@@ -35,16 +35,6 @@ var allowCrossDomain = function(req, res, next) {
 };
 
 
-//connect to postgres db
-var client = new pg.Client(process.env.DATABASE_URL);
-client.connect(function(err) {
-  client.query('SELECT NOW() AS "theTime"', function(err, result) {
-      console.log(result.rows[0].theTime);
-      //output: Tue Jan 15 2013 19:12:47 GMT-600 (CST)
-  });
-});
-
-
 //get from https://dev.twitter.com/apps/
 var TWITTER_CONSUMER_KEY = 'PryPxesQscYFUx9NahNFFg';
 var TWITTER_CONSUMER_SECRET = 'qKWPyqsopMi0cP1cHG1RWeVTMpzhlzEyOC52YfzqIe0';
@@ -65,6 +55,32 @@ app.configure(function(){
   app.use(express.errorHandler({ dumpExceptions: true, showStack: true }));
 });
 
+
+var mongo_uri = 'mongodb://heroku_app12779874:i3og9s4csabetbn8la6m0vt5uu@ds037907.mongolab.com:37907/heroku_app12779874';
+var tweetCollection;
+
+
+//setup db
+mongo.connect(mongo_uri, {}, function(error, db){
+  db.addListener("error", function(error){
+    console.log("Error connecting to MongoLab");
+  });
+  //create the mongo collection if it doesnt exist
+  db.createCollection('tweets', function(err, collection){
+    db.collection('tweets', function(err, collection){
+      tweetCollection = collection;
+      initRoutes();
+    });
+  });
+});
+
+var stream = twit.stream('user');
+
+stream.on('tweet', function (tweet) {
+  console.log(tweet);
+});
+
+
 //start server
 var port = process.env.PORT || 3001;
 app.listen(port);
@@ -72,98 +88,119 @@ console.log('sxbc server started on port '+port);
 
 
 //post route
-app.post('*', function(req, res){
-  var message = req.body.message;
-  var ip = req.connection.remoteAddress;
-  var wordFound = false;
-
-  console.log('ip:'+ip+' - '+message);
-
-  if(message.match('@')){
-    res.json(403,{
-      "error":{
-        "data":"{\"errors\":[{\"code\":403,\"message\":\"We were forced to disable the (at) function by Twitter, party poopers. Sorry\"}]}",
-        "statusCode":403
-      }
-    });
-    return;
-  }
-  
-  // for (var i = 0; i < acceptedWords.length; i++) {
-  //   var word = acceptedWords[i].toLowerCase();
-  //   if(message.toLowerCase().match(word)){
-  //     wordFound = true;
-  //   }
-  // }
-  
-  // if(!wordFound){
-  //   res.json(400,{
-  //     "error":{
-  //       "data":"{\"errors\":[{\"code\":400,\"message\":\"Your love is denied, try again\"}]}",
-  //       "statusCode":400
-  //     }
-  //   });
-  //   return;
-  // }
+function initRoutes(){
+  app.post('*', function(req, res){
+    
+    var message = req.body.message;
+    var ip = req.connection.remoteAddress;
+    var wordFound = false;
 
 
-  twit.post('statuses/update', { status: message}, function(err, reply) {
-    if(err) {
-      console.log(err.statusCode);
-      res.json(err.statusCode,{error:err});
-      console.log('twitter error:'+message);
+    if(message.match('@')){
+      res.json(403,{
+        "error":{
+          "data":"{\"errors\":[{\"code\":403,\"message\":\"We were forced to disable the (at) function by Twitter, party poopers. Sorry\"}]}",
+          "statusCode":403
+        }
+      });
       return;
     }
-    console.log('Server:'+req.connection.remoteAddress+' Tweeted:'+message);
-    res.json(200,{success:reply});
+
+    // for (var i = 0; i < acceptedWords.length; i++) {
+    //   var word = acceptedWords[i].toLowerCase();
+    //   if(message.toLowerCase().match(word)){
+    //     wordFound = true;
+    //   }
+    // }
+    
+    // if(!wordFound){
+    //   res.json(400,{
+    //     "error":{
+    //       "data":"{\"errors\":[{\"code\":400,\"message\":\"Your love is denied, try again\"}]}",
+    //       "statusCode":400
+    //     }
+    //   });
+    //   return;
+    // }
+
+
+    twit.post('statuses/update', { status: message}, function(err, reply) {
+      if(err) {
+        console.log(err.statusCode);
+        res.json(err.statusCode,{error:err});
+        console.log('twitter error:'+message);
+        return;
+      }
+
+      var tweetData = reply;
+      // tweetCollection.insert(tweetData, function(error, result){
+      //   if(err) {
+      //     console.log(err.statusCode);
+      //     res.json(err.statusCode,{error:err});
+      //     console.log('twitter error:'+message);
+      //     return;
+      //   }
+      //   // tweetCollection.find().toArray(function(err, items) {
+      //   //   console.log(items);
+      //   // });
+      //   res.json(200,{success:result});
+      // });
+    });
   });
-});
 
 
 
 
-//gets
-app.get('/followers',function(req,res){
-  twit.get('followers/ids', { screen_name: 'canttweetthis_' },  function (err, reply) {
-    res.send(reply);
+
+
+
+
+  //gets
+  app.get('/followers',function(req,res){
+    twit.get('followers/ids', { screen_name: 'canttweetthis_' },  function (err, reply) {
+      res.send(reply);
+    });
   });
-});
 
-app.get('/tweets/:count/:cursor',function(req,res){
-  var cursor = req.params.cursor || null;
-  var reqSettings = {
-    screen_name: 'b3nroth',
-    count:req.params.count,
-    max_id:cursor
-  };
-  getTweets(req,res,reqSettings);
-});
-app.get('/tweets/:count',function(req,res){
-  var reqSettings = {
-    screen_name: 'b3nroth',
-    count:req.params.count
-  };
-  getTweets(req,res,reqSettings);
-});
+  app.get('/tweets/:count/:cursor',function(req,res){
+    var cursor = req.params.cursor || null;
+    var reqSettings = {
+      screen_name: 'b3nroth',
+      count:req.params.count,
+      max_id:cursor
+    };
+    getTweets(req,res,reqSettings);
+  });
+  app.get('/tweets/:count',function(req,res){
+    var reqSettings = {
+      screen_name: 'b3nroth',
+      count:req.params.count
+    };
+    getTweets(req,res,reqSettings);
+  });
+
+  app.get('/db',function(req,res){
+    tweetCollection.find().toArray(function(err, items) {
+      res.json(200,items);
+    });
+  });
+};
+
 
 
 
 function getTweets(req,res,reqSettings){
   twit.get('statuses/user_timeline', reqSettings,  function (err, reply) {
-
     if(err) {
       res.json(500,err.twitterReply);
       console.log(err);
       return;
     }
-
-    // var messages = [];
-    // for (var i = 0; i < reply.length; i++) {
-    //   messages.push(reply[i].text);
-    // }
     res.json(200,reply);
   });
 }
+
+
 
 
 

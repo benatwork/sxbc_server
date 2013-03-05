@@ -3,8 +3,8 @@
   "version": "0.0.1",
   "dependencies": {
     "express": "latest",
-    "twit": "1.0.12",
-    "pg": "0.6.15"
+    "twit": "1.1.4",
+    "mongodb": "0.9.x"
   },
   "engines": {
     "node": "0.8.x",
