@@ -50,27 +50,6 @@ app.configure(function(){
 var mongo_uri = 'mongodb://heroku_app12779874:i3og9s4csabetbn8la6m0vt5uu@ds037907.mongolab.com:37907/heroku_app12779874';
 var tweetCollection;
 
-mongo.connect(mongo_uri, {}, function(error, db){
-  db.addListener("error", function(error){
-    console.log("Error connecting to MongoLab");
-  });
-  //create the mongo collection if it doesnt exist
-  db.createCollection('tweets', function(err, collection){
-    db.collection('tweets', function(err, collection){
-      tweetCollection = collection;
-      //db ready, init the websockets
-      io.sockets.on('connection', function (socket) {
-        _socket = socket;
-        //websockets ready, init routes
-
-      });
-      initRoutes();
-
-
-    });
-  });
-});
-
 
 
 // start the twitter stream
@@ -98,6 +77,25 @@ io.configure(function () {
 server.listen(port);
 console.log('sxbc server started on port '+port);
 
+
+mongo.connect(mongo_uri, {}, function(error, db){
+  db.addListener("error", function(error){
+    console.log("Error connecting to MongoLab");
+  });
+  //create the mongo collection if it doesnt exist
+  db.createCollection('tweets', function(err, collection){
+    db.collection('tweets', function(err, collection){
+      tweetCollection = collection;
+      //db ready, init the websockets
+      
+      initRoutes();
+    });
+  });
+});
+
+io.sockets.on('connection', function (socket) {
+  _socket = socket;
+});
 
 
 
