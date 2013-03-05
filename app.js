@@ -62,8 +62,9 @@ mongo.connect(mongo_uri, {}, function(error, db){
       io.sockets.on('connection', function (socket) {
         _socket = socket;
         //websockets ready, init routes
-        initRoutes();
+        
       });
+      initRoutes();
 
       
     });
@@ -133,18 +134,7 @@ function initRoutes(){
   });
 
 
-
-
-
-
-
   //gets
-  app.get('/followers',function(req,res){
-    twit.get('followers/ids', { screen_name: 'canttweetthis_' },  function (err, reply) {
-      res.send(reply);
-    });
-  });
-
   app.get('/tweets/:count/:cursor',function(req,res){
     var cursor = req.params.cursor || null;
     var reqSettings = {
