@@ -66,7 +66,7 @@ mongo.connect(mongo_uri, {}, function(error, db){
 
 
 
-//
+// start the twitter stream
 var stream = twit.stream('user');
 stream.on('tweet', function (tweet) {
   console.log(tweet);
@@ -75,11 +75,8 @@ stream.on('tweet', function (tweet) {
 
 //start server
 var port = process.env.PORT || 3001;
-//app.listen(port);
-
 var server = require('http').createServer(app);
 var io = io.listen(server);
-
 server.listen(port);
 console.log('sxbc server started on port '+port);
 
@@ -91,12 +88,10 @@ io.sockets.on('connection', function (socket) {
 });
 
 
-
-
-//post route
+//init routes
 function initRoutes(){
+  
   app.post('*', function(req, res){
-
     var message = req.body.message;
     var ip = req.connection.remoteAddress;
     var wordFound = false;
@@ -139,18 +134,18 @@ function initRoutes(){
 
       var tweetData = reply;
       _socket.volatile.emit('tweet', tweetData);
-      // tweetCollection.insert(tweetData, function(error, result){
-      //   if(err) {
-      //     console.log(err.statusCode);
-      //     res.json(err.statusCode,{error:err});
-      //     console.log('twitter error:'+message);
-      //     return;
-      //   }
-      //   // tweetCollection.find().toArray(function(err, items) {
-      //   //   console.log(items);
-      //   // });
-      //   res.json(200,{success:result});
-      // });
+      tweetCollection.insert(tweetData, function(error, result){
+        if(err) {
+          console.log(err.statusCode);
+          res.json(err.statusCode,{error:err});
+          console.log('twitter error:'+message);
+          return;
+        }
+        // tweetCollection.find().toArray(function(err, items) {
+        //   console.log(items);
+        // });
+        res.json(200,{success:result});
+      });
     });
   });
 
