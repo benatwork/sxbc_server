@@ -90,53 +90,34 @@ io.sockets.on('connection', function (socket) {
 
 //init routes
 function initRoutes(){
-  
+
   app.post('*', function(req, res){
     var message = req.body.message;
     var ip = req.connection.remoteAddress;
     var wordFound = false;
 
+    //return error if @ is found
     if(message.match('@')){
-      res.json(403,{
-        "error":{
-          "data":"{\"errors\":[{\"code\":403,\"message\":\"We were forced to disable the (at) function by Twitter, party poopers. Sorry\"}]}",
-          "statusCode":403
-        }
-      });
+      res.json(403,customErrorMessage(403,'We were forced to disable the (at) function by Twitter, party poopers'));
       return;
     }
 
-    // for (var i = 0; i < acceptedWords.length; i++) {
-    //   var word = acceptedWords[i].toLowerCase();
-    //   if(message.toLowerCase().match(word)){
-    //     wordFound = true;
-    //   }
-    // }
-    
-    // if(!wordFound){
-    //   res.json(400,{
-    //     "error":{
-    //       "data":"{\"errors\":[{\"code\":400,\"message\":\"Your love is denied, try again\"}]}",
-    //       "statusCode":400
-    //     }
-    //   });
-    //   return;
-    // }
-
-
+    //post the tweet
     twit.post('statuses/update', { status: message}, function(err, reply) {
       if(err) {
-        console.log(err.statusCode);
         res.json(err.statusCode,{error:err});
         console.log('twitter error:'+message);
         return;
       }
 
       var tweetData = reply;
+
+      //send tweetdata back to client over websocket for instant rendering
       _socket.volatile.emit('tweet', tweetData);
+
+      //add tweet to the local db
       tweetCollection.insert(tweetData, function(error, result){
         if(err) {
-          console.log(err.statusCode);
           res.json(err.statusCode,{error:err});
           console.log('twitter error:'+message);
           return;
@@ -200,6 +181,15 @@ function getTweets(req,res,reqSettings){
   });
 }
 
+
+function customErrorMessage(code,message){
+  return {
+    "error":{
+      "data":"{\"errors\":[{\"code\":"+code+",\"message\":\""+message+"\"}]}",
+      "statusCode":code
+    }
+  }
+}
 
 
 
