@@ -58,8 +58,14 @@ mongo.connect(mongo_uri, {}, function(error, db){
   db.createCollection('tweets', function(err, collection){
     db.collection('tweets', function(err, collection){
       tweetCollection = collection;
-      //db ready, init the routes
-      initRoutes();
+      //db ready, init the websockets
+      io.sockets.on('connection', function (socket) {
+        _socket = socket;
+        //websockets ready, init routes
+        initRoutes();
+      });
+
+      
     });
   });
 });
@@ -82,10 +88,6 @@ console.log('sxbc server started on port '+port);
 
 
 
-//init websockets
-io.sockets.on('connection', function (socket) {
-  _socket = socket;
-});
 
 
 //init routes
