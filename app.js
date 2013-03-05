@@ -84,14 +84,17 @@ stream.on('tweet', function (tweet) {
 var port = process.env.PORT || 3001;
 var server = require('http').createServer(app);
 
+
+
+var io = io.listen(server);
+
 // Workaround for Heroku not supporting true websockets
 // https://devcenter.heroku.com/articles/using-socket-io-with-node-js-on-heroku
-io.configure(function () {
 io.configure(function () {
   io.set("transports", ["xhr-polling"]);
   io.set("polling duration", 10);
 });
-var io = io.listen(server);
+
 server.listen(port);
 console.log('sxbc server started on port '+port);
 
