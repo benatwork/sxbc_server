@@ -52,21 +52,20 @@ var tweetCollection;
 
 
 
-// start the twitter stream
-var stream = twit.stream('user');
-stream.on('tweet', function (tweet) {
-  console.log(tweet);
-});
 
 
 //start server
 var port = process.env.PORT || 3001;
 var server = require('http').createServer(app);
+server.listen(port);
+console.log('sxbc server started on port '+port);
+
+// start the twitter stream
 
 
 
+//start the websocket listener
 var io = io.listen(server);
-
 // Workaround for Heroku not supporting true websockets
 // https://devcenter.heroku.com/articles/using-socket-io-with-node-js-on-heroku
 io.configure(function () {
@@ -74,10 +73,14 @@ io.configure(function () {
   io.set("polling duration", 10);
 });
 
-server.listen(port);
-console.log('sxbc server started on port '+port);
+//on websocket connections
+// io.sockets.on('connection', function (socket) {
+//   console.log('client has connected to websocket');
+//   _socket = socket;
+// });
 
 
+//connect to the mongo db
 mongo.connect(mongo_uri, {}, function(error, db){
   db.addListener("error", function(error){
     console.log("Error connecting to MongoLab");
@@ -87,17 +90,27 @@ mongo.connect(mongo_uri, {}, function(error, db){
     db.collection('tweets', function(err, collection){
       tweetCollection = collection;
       //db ready, init the websockets
-      
-      initRoutes();
+
     });
   });
 });
 
-io.sockets.on('connection', function (socket) {
-  _socket = socket;
+
+
+
+var stream = twit.stream('user');
+stream.on('connect',function(){
+  console.log('connected to twitter stream');
+  stream.on('tweet', function (tweet) {
+    //send the tweet out to all connected websockets
+    io.sockets.emit('tweet', tweet);
+  });
 });
 
 
+
+//listen for incoming tweets and send them through the websocket
+initRoutes();
 
 
 //init routes
@@ -123,9 +136,6 @@ function initRoutes(){
       }
 
       var tweetData = reply;
-
-      //send tweetdata back to client over websocket for instant rendering
-      _socket.volatile.emit('tweet', tweetData);
 
       //add tweet to the local db
       tweetCollection.insert(tweetData, function(error, result){
