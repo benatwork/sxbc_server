@@ -122,7 +122,7 @@ function initRoutes(){
 
     //return error if @ is found
     if(message.match('@')){
-      res.json(403,customErrorMessage(403,"Sorry, no @'s"));
+      res.json(403,customErrorMessage(403,"!! SORRY, NO @'s !!"));
       return;
     }
 
@@ -130,7 +130,7 @@ function initRoutes(){
     twit.post('statuses/update', { status: message}, function(err, reply) {
       if(err) {
         res.json(err.statusCode,{error:err});
-        console.log('twitter error:'+message);
+        console.log('twitter error:'+err);
         return;
       }
 
@@ -147,7 +147,6 @@ function initRoutes(){
 
     });
   });
-
 
   app.get('/get_tweets',function(req,res){
     //get request settings from headers
