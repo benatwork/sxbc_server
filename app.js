@@ -6,13 +6,13 @@ var config = require('./config')(),
   io = require('socket.io'),
   _socket;
 
-
+console.log(config.allowedDomains);
 var allowCrossDomain = function(req, res, next) {
     res.header('Access-Control-Allow-Credentials', true);
     res.header('Access-Control-Allow-Origin', req.headers.origin);
     res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');
     //res.header('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
-    res.header("Access-Control-Allow-Headers", "origin, x-requested-with, content-type");
+    res.header("Access-Control-Allow-Headers", "origin, x-requested-with, x-name, x-count,x-cursor, content-type");
      // intercept OPTIONS method
 
     if ('OPTIONS' == req.method) {
@@ -23,7 +23,7 @@ var allowCrossDomain = function(req, res, next) {
 };
 
 //set active twitter account config obj
-var activeTwitterAppConfig = conf.twitterApps[0];
+var activeTwitterAppConfig = config.twitterApps[0];
 
 
 var twit = new Twit({
@@ -167,11 +167,32 @@ function initRoutes(){
     getTweets(req,res,reqSettings);
   });
 
+  app.get('/get_tweets',function(req,res){
+    var reqSettings = {
+      screen_name: req.headers['x-name'],
+      count: req.headers['x-count']
+    };
+
+    if(req.headers['x-cursor']) reqSettings.max_id = req.headers['x-cursor'];
+
+    twit.get('statuses/user_timeline', reqSettings,  function (err, reply) {
+      if(err) {
+        res.json(500,err.twitterReply);
+        console.log(err);
+        return;
+      }
+      res.json(200,reply);
+    });
+  });
+
+
+
   app.get('/db',function(req,res){
     tweetCollection.find().toArray(function(err, items) {
       res.json(200,items);
     });
   });
+
 };
 
 

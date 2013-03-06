@@ -1,7 +1,7 @@
 
 
 //config.js
-conf = {
+config = {
     twitterApps:[
 		{
 			name:'SXBackChannel',
@@ -11,6 +11,10 @@ conf = {
 			accessToken:'1145788693-XaqqH06lzZ0VyUAWwqMoPOhItUie1RLxB5FEJ7J',
 			accessSecret:'iCtcmJichJTsHiOINdpGZkOgncbsJB1xIM52p9mPvQ'
 		}
+    ],
+    allowedDomains:[
+		'http://localhost',
+		'http://sxbackchannel.com'
     ]
 
 };
@@ -20,7 +24,7 @@ conf = {
 
 
 if( typeof module !== "undefined" && ('exports' in module)){
-    module.exports = function(){return conf;};
+    module.exports = function(){return config;};
 } else {
-    callback( conf );
+    callback( config );
 }
