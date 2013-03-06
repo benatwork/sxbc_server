@@ -202,6 +202,7 @@ function initRoutes(){
         console.log(err);
         return;
       }
+      console.log(reply);
       res.json(200,reply);
     });
 
@@ -220,7 +221,14 @@ function initRoutes(){
         var section = resources[req.params.path1];
         var selector = '/'+req.params.path1+'/'+req.params.path2;
         var data = section[selector];
-        res.json(200,section[selector]);
+        var utcSeconds = data.reset;
+        var now = new Date();
+        var d = new Date(0);
+        d.setUTCSeconds(utcSeconds);
+        data.resetTime = d;
+        var difTime = new Date(d.getTime() - now.getTime());
+        data.timeTilReset = difTime.getMinutes()+':'+difTime.getSeconds();
+        res.json(200,data);
         return;
       } else if(req.params.path1){
         res.json(200,resources[req.params.path1]);
@@ -232,8 +240,11 @@ function initRoutes(){
       res.json(200,reply);
     });
   }
-}
 
+}
+function formatRateLimitTime(resetTime){
+
+}
 
 function customErrorMessage(code,message){
   return {
