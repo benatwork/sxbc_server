@@ -1,10 +1,10 @@
-var express = require("express"),
+var config = require('./config')(),
+  express = require("express"),
   app = express(),
   Twit = require('twit'),
   mongo = require('mongodb'),
   io = require('socket.io'),
   _socket;
-
 
 
 var allowCrossDomain = function(req, res, next) {
@@ -22,19 +22,15 @@ var allowCrossDomain = function(req, res, next) {
     }
 };
 
-//twitter credentials
-//get from https://dev.twitter.com/apps/
-var TWITTER_CONSUMER_KEY = 'PryPxesQscYFUx9NahNFFg';
-var TWITTER_CONSUMER_SECRET = 'qKWPyqsopMi0cP1cHG1RWeVTMpzhlzEyOC52YfzqIe0';
-var TWITTER_ACCESS_TOKEN = '1145788693-XaqqH06lzZ0VyUAWwqMoPOhItUie1RLxB5FEJ7J';
-var TWITTER_ACCESS_SECRET = 'iCtcmJichJTsHiOINdpGZkOgncbsJB1xIM52p9mPvQ';
+//set active twitter account config obj
+var activeTwitterAppConfig = conf.twitterApps[0];
 
-//init twitter middleware
+
 var twit = new Twit({
-  consumer_key: TWITTER_CONSUMER_KEY,
-  consumer_secret:      TWITTER_CONSUMER_SECRET,
-  access_token:         TWITTER_ACCESS_TOKEN,
-  access_token_secret:  TWITTER_ACCESS_SECRET
+  consumer_key:         activeTwitterAppConfig.consumerKey,
+  consumer_secret:      activeTwitterAppConfig.consumerSecret,
+  access_token:         activeTwitterAppConfig.accessToken,
+  access_token_secret:  activeTwitterAppConfig.accessSecret
 });
 
 //configure express server
@@ -46,12 +42,6 @@ app.configure(function(){
 });
 
 
-//setup mongodb
-var mongo_uri = 'mongodb://heroku_app12779874:i3og9s4csabetbn8la6m0vt5uu@ds037907.mongolab.com:37907/heroku_app12779874';
-var tweetCollection;
-
-
-
 
 
 //start server
@@ -60,7 +50,6 @@ var server = require('http').createServer(app);
 server.listen(port);
 console.log('sxbc server started on port '+port);
 
-// start the twitter stream
 
 
 
@@ -72,15 +61,38 @@ io.configure(function () {
   io.set("transports", ["xhr-polling"]);
   io.set("polling duration", 10);
 });
+//reduce socket.io logs
+io.set('log level', 1);
 
-//on websocket connections
-// io.sockets.on('connection', function (socket) {
-//   console.log('client has connected to websocket');
-//   _socket = socket;
-// });
+
+//get list of twitter id's to watch from the config
+var twitterAccountIds = [];
+for (var i = 0; i < config.twitterApps.length; i++) {
+  var appConfig = config.twitterApps[i];
+  twitterAccountIds.push(appConfig.id);
+}
+
+//connect to twitter stream
+var stream = twit.stream('statuses/filter',{follow:twitterAccountIds});
+
+//on connection to twitter stream
+stream.on('connect',function(request){
+  console.log('connected to twitter stream');
+});
+
+stream.on('tweet', function (tweet) {
+  //send the tweet out to all connected websockets
+  io.sockets.emit('tweet', tweet);
+});
+
+
+
 
 
 //connect to the mongo db
+var mongo_uri = 'mongodb://heroku_app12779874:i3og9s4csabetbn8la6m0vt5uu@ds037907.mongolab.com:37907/heroku_app12779874';
+var tweetCollection;
+
 mongo.connect(mongo_uri, {}, function(error, db){
   db.addListener("error", function(error){
     console.log("Error connecting to MongoLab");
@@ -97,21 +109,7 @@ mongo.connect(mongo_uri, {}, function(error, db){
 
 
 
-
-var stream = twit.stream('user');
-stream.on('connect',function(){
-  console.log('connected to twitter stream');
-  stream.on('tweet', function (tweet) {
-    //send the tweet out to all connected websockets
-    io.sockets.emit('tweet', tweet);
-  });
-});
-
-
-
-//listen for incoming tweets and send them through the websocket
 initRoutes();
-
 
 //init routes
 function initRoutes(){
@@ -144,9 +142,6 @@ function initRoutes(){
           console.log('twitter error:'+message);
           return;
         }
-        // tweetCollection.find().toArray(function(err, items) {
-        //   console.log(items);
-        // });
         res.json(200,{success:result});
       });
     });
@@ -163,6 +158,7 @@ function initRoutes(){
     };
     getTweets(req,res,reqSettings);
   });
+
   app.get('/tweets/:count',function(req,res){
     var reqSettings = {
       screen_name: 'b3nroth',
@@ -177,8 +173,6 @@ function initRoutes(){
     });
   });
 };
-
-
 
 
 function getTweets(req,res,reqSettings){
