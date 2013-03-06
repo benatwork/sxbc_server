@@ -4,9 +4,10 @@ var config = require('./config')(),
   Twit = require('twit'),
   mongo = require('mongodb'),
   io = require('socket.io'),
+  _ = require('underscore'),
   _socket;
 
-console.log(config.allowedDomains);
+
 var allowCrossDomain = function(req, res, next) {
     res.header('Access-Control-Allow-Credentials', true);
     res.header('Access-Control-Allow-Origin', req.headers.origin);
@@ -121,7 +122,7 @@ function initRoutes(){
 
     //return error if @ is found
     if(message.match('@')){
-      res.json(403,customErrorMessage(403,'We were forced to disable the (at) function by Twitter, party poopers'));
+      res.json(403,customErrorMessage(403,"Sorry, no @'s"));
       return;
     }
 
@@ -134,49 +135,38 @@ function initRoutes(){
       }
 
       var tweetData = reply;
+      res.json(200,{success:tweetData});
 
       //add tweet to the local db
       tweetCollection.insert(tweetData, function(error, result){
         if(err) {
-          res.json(err.statusCode,{error:err});
-          console.log('twitter error:'+message);
+          console.log('error adding to the db:'+message);
           return;
         }
-        res.json(200,{success:result});
       });
+
     });
   });
 
-  //gets
-  app.get('/tweets/:count/:cursor',function(req,res){
-    var cursor = req.params.cursor || null;
-    var reqSettings = {
-      screen_name: 'sxsw',
-      count:req.params.count,
-      max_id:cursor
-    };
-    getTweets(req,res,reqSettings);
-  });
-
-  app.get('/tweets/:count',function(req,res){
-    var reqSettings = {
-      screen_name: 'sxsw',
-      count:req.params.count
-    };
-    getTweets(req,res,reqSettings);
-  });
 
   app.get('/get_tweets',function(req,res){
+    //get request settings from headers
     var reqSettings = {
       screen_name: req.headers['x-name'],
       count: req.headers['x-count']
     };
-
+    //get the cursor to use as max_id
     if(req.headers['x-cursor']) reqSettings.max_id = req.headers['x-cursor'];
 
     twit.get('statuses/user_timeline', reqSettings,  function (err, reply) {
       if(err) {
-        res.json(500,err.twitterReply);
+        var twitterError = JSON.parse(err.data).errors[0];
+        if(err.statusCode == 429 && twitterError.code == 88){
+          console.log('rate limit!!!!');
+          res.json(err.statusCode,err);
+          return;
+        }
+        res.json(err.statusCode,err.twitterReply);
         console.log(err);
         return;
       }
@@ -184,34 +174,21 @@ function initRoutes(){
     });
   });
 
-
-
+  //get database contents
   app.get('/db',function(req,res){
     tweetCollection.find().toArray(function(err, items) {
       res.json(200,items);
     });
   });
-
 };
-
-
-function getTweets(req,res,reqSettings){
-  twit.get('statuses/user_timeline', reqSettings,  function (err, reply) {
-    if(err) {
-      res.json(500,err.twitterReply);
-      console.log(err);
-      return;
-    }
-    res.json(200,reply);
-  });
-}
 
 
 function customErrorMessage(code,message){
   return {
     "error":{
       "data":"{\"errors\":[{\"code\":"+code+",\"message\":\""+message+"\"}]}",
-      "statusCode":code
+      "statusCode":code,
+      "statusText":message
     }
   }
 }
