@@ -13,7 +13,7 @@ var allowCrossDomain = function(req, res, next) {
     res.header('Access-Control-Allow-Origin', req.headers.origin);
     res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');
     //res.header('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
-    res.header("Access-Control-Allow-Headers", "origin, x-requested-with, x-name, x-count,x-cursor, content-type");
+    res.header("Access-Control-Allow-Headers", "origin, x-requested-with, x-name, x-count, x-cursor, x-list-id, content-type");
      // intercept OPTIONS method
 
     if ('OPTIONS' == req.method) {
@@ -144,24 +144,57 @@ function initRoutes(){
           return;
         }
       });
-
     });
   });
 
-  app.get('/get_tweets',function(req,res){
+  //get tweets from a list
+  app.get('/get_list_tweets',function(req,res){
     //get request settings from headers
     var reqSettings = {
-      screen_name: req.headers['x-name'],
-      count: req.headers['x-count']
+      count: parseInt(req.headers['x-count'],10),
+      list_id: parseInt(req.headers['x-list-id'],10),
+      include_rts: 1
     };
-    //get the cursor to use as max_id
-    if(req.headers['x-cursor']) reqSettings.max_id = req.headers['x-cursor'];
+    getTweets('lists/statuses',req,res);
 
-    twit.get('statuses/user_timeline', reqSettings,  function (err, reply) {
+  });
+
+
+
+  // get tweets from a user
+  app.get('/get_user_tweets',function(req,res){
+    //get request settings from headers
+    getTweets('statuses/user_timeline',req,res);
+  });
+
+  //get database contents
+  app.get('/db',function(req,res){
+    tweetCollection.find().toArray(function(err, items) {
+      res.json(200,items);
+    });
+  });
+
+  app.get('/rate_limit',getRates);
+  app.get('/rate_limit/:path1',getRates);
+  app.get('/rate_limit/:path1/:path2',getRates);
+
+  function getTweets(path,req,res){
+    //set the cursor if applicable
+    var reqSettings = {
+      screen_name: req.headers['x-name'],
+      count: req.headers['x-count'],
+      list_id: parseInt(req.headers['x-list-id'],10),
+      include_rts: 1
+    };
+
+    if(req.headers['x-cursor']) reqSettings.max_id = req.headers['x-cursor'];
+    //make the request
+    twit.get(path, reqSettings,  function (err, reply) {
       if(err) {
         var twitterError = JSON.parse(err.data).errors[0];
         if(err.statusCode == 429 && twitterError.code == 88){
-          console.log('rate limit!!!!');
+          console.log('rate limit!!!!',err);
+
           res.json(err.statusCode,err);
           return;
         }
@@ -171,15 +204,35 @@ function initRoutes(){
       }
       res.json(200,reply);
     });
-  });
 
-  //get database contents
-  app.get('/db',function(req,res){
-    tweetCollection.find().toArray(function(err, items) {
-      res.json(200,items);
+  }
+
+  function getRates(req,res){
+    twit.get('application/rate_limit_status',  function (err, reply) {
+      if(err) {
+        var twitterError = JSON.parse(err.data).errors[0];
+        res.json(err.statusCode,err.twitterReply);
+        return;
+      }
+      var resources = reply.resources;
+
+      if(req.params.path1 && req.params.path2){
+        var section = resources[req.params.path1];
+        var selector = '/'+req.params.path1+'/'+req.params.path2;
+        var data = section[selector];
+        res.json(200,section[selector]);
+        return;
+      } else if(req.params.path1){
+        res.json(200,resources[req.params.path1]);
+        return;
+      }
+      // var d = new Date();
+      // var timeLeft
+
+      res.json(200,reply);
     });
-  });
-};
+  }
+}
 
 
 function customErrorMessage(code,message){
@@ -189,7 +242,7 @@ function customErrorMessage(code,message){
       "statusCode":code,
       "statusText":message
     }
-  }
+  };
 }
 
 
