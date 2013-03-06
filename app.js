@@ -147,12 +147,11 @@ function initRoutes(){
     });
   });
 
-
   //gets
   app.get('/tweets/:count/:cursor',function(req,res){
     var cursor = req.params.cursor || null;
     var reqSettings = {
-      screen_name: 'b3nroth',
+      screen_name: 'sxsw',
       count:req.params.count,
       max_id:cursor
     };
@@ -161,7 +160,7 @@ function initRoutes(){
 
   app.get('/tweets/:count',function(req,res){
     var reqSettings = {
-      screen_name: 'b3nroth',
+      screen_name: 'sxsw',
       count:req.params.count
     };
     getTweets(req,res,reqSettings);
