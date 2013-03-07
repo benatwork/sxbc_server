@@ -71,13 +71,11 @@ for (var i = 0; i < config.twitterApps.length; i++) {
 }
 
 //connect to twitter stream
-var stream = twit.stream('statuses/filter', {
-    follow: twitterAccountIds
-});
+var stream = twit.stream('statuses/filter', { follow: twitterAccountIds});
 
 //on connection to twitter stream
 stream.on('connect', function (request) {
-    console.log('connected to twitter stream');
+    console.log('connected to twitter streams: ',twitterAccountIds);
 });
 
 stream.on('tweet', function (tweet) {
@@ -110,14 +108,17 @@ mongo.connect(mongo_uri, {}, function (error, db) {
 });
 
 
-
 initRoutes();
 
 //init routes
 function initRoutes() {
+
+
+    //_____________ post tweet routes ______________________________________
+
     app.post('*', function (req, res) {
         var message = req.body.message;
-        var serverID = req.body.accountId;
+        var serverID = parseInt(req.body.accountId,10);
         var ip = req.connection.remoteAddress;
         var wordFound = false;
 
@@ -130,25 +131,38 @@ function initRoutes() {
             return;
         }
         //post the tweet
-        var twitInstance = twitInstances[serverID] || 0;
-        postTweet(twitInstance, message, req, res);
+        console.log('begin POST ----------------------------------------------------------------');
+        postTweet(serverID, message, req, res);
     });
 
-    function postTweet(twitInstance, message, req, res) {
-        twitInstance.post('statuses/update', {
-            status: message
-        }, function (err, reply) {
+    function postTweet(twitInstanceId, message, req, res) {
+        console.log('posting with app ',twitInstanceId,' :: ',message);
+        var twitInstance = twitInstances[twitInstanceId] || twitInstances[0];
+
+        twitInstance.post('statuses/update', { status: message }, function (err, reply) {
             if (err) {
-                if (err.statusCode == 429 && twitterError.code == 88) {
-                    console.log('rate limit!!!!', err);
-                    postTweet(twit2, req, res);
-                    //res.json(err.statusCode,err);
-                    return;
+
+                var twitterError = JSON.parse(err.data).errors[0];
+                console.log(twitterError);
+
+                // if the error has a particular twitter error code (like rate limit), try posting with another twit instance
+                // otherwise return the error
+                if(twitterError.code == 88){
+                    newTwitInstanceId = twitInstanceId += 1;
+                    if(newTwitInstanceId <= twitInstances.length-1) {
+                        //rerun postTweet with new instance id
+                        postTweet(newTwitInstanceId,message, req, res);
+                    } else {
+                        res.json(err.statusCode, {
+                            error: err
+                        });
+                        return;
+                    }
+                } else {
+                    res.json(err.statusCode, {
+                        error: err
+                    });
                 }
-                res.json(err.statusCode, {
-                    error: err
-                });
-                console.log('twitter error:' + err);
                 return;
             }
 
@@ -168,39 +182,24 @@ function initRoutes() {
     }
 
 
+    //_____________ get tweets routes ______________________________________
+
     //get tweets from a list
     app.get('/get_list_tweets', function (req, res) {
-        //get request settings from headers
-        var reqSettings = {
-            count: parseInt(req.headers['x-count'], 10),
-            list_id: parseInt(req.headers['x-list-id'], 10),
-            include_rts: 1
-        };
-        getTweets('lists/statuses', req, res);
-
+        getTweets(0,'lists/statuses', req, res);
     });
-
-
 
     // get tweets from a user
     app.get('/get_user_tweets', function (req, res) {
-        //get request settings from headers
-        getTweets('statuses/user_timeline', req, res);
+        getTweets(0,'statuses/user_timeline', req, res);
     });
 
-    //get database contents
-    app.get('/db', function (req, res) {
-        tweetCollection.find().toArray(function (err, items) {
-            res.json(200, items);
-        });
-    });
 
-    app.get('/rate_limits', getRates);
-    app.get('/rate_limits/:path1', getRates);
-    app.get('/rate_limits/:path1/:path2', getRates);
-
-    function getTweets(path, req, res) {
+    var count = 0;
+    function getTweets(twitInstanceId,path, req, res) {
+        count ++;
         //set the cursor if applicable
+        var twitInstance = twitInstances[twitInstanceId] || twitInstances[0];
         var reqSettings = {
             owner_screen_name: req.headers['x-name'],
             screen_name: req.headers['x-name'],
@@ -209,27 +208,50 @@ function initRoutes() {
             //include_rts: 1
         };
 
+        //set cursor if one is provided in headers
         if (req.headers['x-cursor']) reqSettings.max_id = req.headers['x-cursor'];
+
+        console.log(count,':get using app:',twitInstanceId);
+
         //make the request
         twit.get(path, reqSettings, function (err, reply) {
             if (err) {
+
                 var twitterError = JSON.parse(err.data).errors[0];
-                if (err.statusCode == 429 && twitterError.code == 88) {
-                    console.log('rate limit!!!!', err);
-                    res.json(err.statusCode, err);
+                // if the error has a particular twitter error code (like rate limit), try getting with another twit instance
+                // otherwise return the error
+                console.log(twitterError);
+                newTwitInstanceId = twitInstanceId += 1;
+                if(newTwitInstanceId <= twitInstances.length-1) {
+                    //rerun postTweet with new instance id
+                    getTweets(newTwitInstanceId,path, req, res);
+                } else {
+
+                    res.json(err.statusCode, {
+                        error: err
+                    });
+                    }
                     return;
                 }
-                res.json(err.statusCode, err.twitterReply);
-                console.log(err);
-                return;
-            }
-            console.log(reply.length);
+            return;
+
             res.json(200, reply);
         });
 
     }
 
-    function getRates(req, res) {
+
+
+    //_____________ rate limit routes ______________________________________
+
+    app.get('/rate_limits', getRates);
+    app.get('/rate_limits/:path1', getRates);
+    app.get('/rate_limits/:path1/:path2', getRates);
+    function getRates(req,res){
+        processRates(req.params.path1,req.params.path2,res);
+    }
+
+    function processRates(path1,path2, res, callback) {
         twit.get('application/rate_limit_status', function (err, reply) {
             if (err) {
                 var twitterError = JSON.parse(err.data).errors[0];
@@ -238,9 +260,9 @@ function initRoutes() {
             }
             var resources = reply.resources;
 
-            if (req.params.path1 && req.params.path2) {
-                var section = resources[req.params.path1];
-                var selector = '/' + req.params.path1 + '/' + req.params.path2;
+            if (path1 && path1) {
+                var section = resources[path1];
+                var selector = '/' + path1 + '/' + path2;
                 var data = section[selector];
                 var utcSeconds = data.reset;
                 var now = new Date();
@@ -249,16 +271,39 @@ function initRoutes() {
                 data.resetTime = d;
                 var difTime = new Date(d.getTime() - now.getTime());
                 data.timeTilReset = difTime.getMinutes() + ':' + difTime.getSeconds();
-                res.json(200, data);
+                if(res) {
+                    res.json(200, data);
+                } else {
+                    callback(data);
+                }
                 return;
-            } else if (req.params.path1) {
-                res.json(200, resources[req.params.path1]);
+            } else if (path1) {
+                if(res) {
+                    res.json(200, resources[path1]);
+                } else {
+                    callback(data);
+                }
                 return;
             }
 
-            res.json(200, reply);
+            if(res) {
+                res.json(200, reply);
+            } else {
+                callback(data);
+            }
         });
     }
+
+
+    //_____________ db routes ______________________________________
+
+
+    //get database contents
+    app.get('/db', function (req, res) {
+        tweetCollection.find().toArray(function (err, items) {
+            res.json(200, items);
+        });
+    });
 
 }
 
