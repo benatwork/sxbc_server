@@ -26,9 +26,16 @@ var allowCrossDomain = function (req, res, next) {
 //set active twitter account config obj
 var activeTwitterAppConfig = config.twitterApps[1];
 
-var twit = new Twit(config.twitterApps[0]);
-var twit2 = new Twit(config.twitterApps[1]);
-var twitInstances = [twit, twit2];
+var twitInstances = [];
+
+for (var i = 0; i < config.twitterApps.length; i++) {
+    var appConfig = config.twitterApps[i];
+    var twitInstance = new Twit(appConfig);
+    twitInstances.push(twitInstance);
+};
+// var twit = new Twit(config.twitterApps[0]);
+// var twit2 = new Twit(config.twitterApps[1]);
+
 
 
 //configure express server
@@ -64,14 +71,13 @@ io.set('log level', 1);
 
 //get list of twitter id's to watch from the config
 var twitterAccountIds = [];
-
 for (var i = 0; i < config.twitterApps.length; i++) {
     var appConfig = config.twitterApps[i];
     twitterAccountIds.push(appConfig.id);
 }
 
 //connect to twitter stream
-var stream = twit.stream('statuses/filter', { follow: twitterAccountIds});
+var stream = twitInstances[0].stream('statuses/filter', { follow: twitterAccountIds});
 
 //on connection to twitter stream
 stream.on('connect', function (request) {
@@ -136,7 +142,7 @@ function initRoutes() {
     });
 
     function postTweet(twitInstanceId, message, req, res) {
-        console.log('posting with app ',twitInstanceId,' :: ',message);
+        
         var twitInstance = twitInstances[twitInstanceId] || twitInstances[0];
 
         twitInstance.post('statuses/update', { status: message }, function (err, reply) {
@@ -166,6 +172,7 @@ function initRoutes() {
                 return;
             }
 
+            console.log('posting with app ',twitInstanceId,' :: ',message);
             var tweetData = reply;
             res.json(200, {
                 success: tweetData
@@ -211,12 +218,11 @@ function initRoutes() {
         //set cursor if one is provided in headers
         if (req.headers['x-cursor']) reqSettings.max_id = req.headers['x-cursor'];
 
-        console.log(count,':get using app:',twitInstanceId);
+        
 
         //make the request
-        twit.get(path, reqSettings, function (err, reply) {
+        twitInstance.get(path, reqSettings, function (err, reply) {
             if (err) {
-
                 var twitterError = JSON.parse(err.data).errors[0];
                 // if the error has a particular twitter error code (like rate limit), try getting with another twit instance
                 // otherwise return the error
@@ -230,11 +236,10 @@ function initRoutes() {
                     res.json(err.statusCode, {
                         error: err
                     });
-                    }
-                    return;
                 }
-            return;
-
+                return;
+            }
+            console.log(count,':get using app:',twitInstanceId);
             res.json(200, reply);
         });
 
@@ -252,7 +257,7 @@ function initRoutes() {
     }
 
     function processRates(path1,path2, res, callback) {
-        twit.get('application/rate_limit_status', function (err, reply) {
+        twitInstances[0].get('application/rate_limit_status', function (err, reply) {
             if (err) {
                 var twitterError = JSON.parse(err.data).errors[0];
                 res.json(err.statusCode, err.twitterReply);
