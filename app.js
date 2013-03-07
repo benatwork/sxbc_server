@@ -88,9 +88,6 @@ stream.on('tweet', function (tweet) {
     //send the tweet out to all connected websockets
     io.sockets.emit('tweet', tweet);
 });
-stream.on('delete', function (tweet) {
-    io.sockets.emit('delete', tweet);
-});
 
 
 
